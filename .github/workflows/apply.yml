@@ -1,0 +1,55 @@
+# TODO(verify): pin every action below to an exact SHA before first real
+# use (supply-chain rule, spec section 3.10).
+name: apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "live/**"
+      - "requests/**"
+      - "modules/**"
+
+jobs:
+  detect:
+    runs-on: self-hosted
+    outputs:
+      stacks: ${{ steps.detect.outputs.stacks }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: detect
+        run: |
+          STACKS=$(bash scripts/detect-changed-stacks.sh "origin/${{ github.event.before }}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "stacks=$STACKS" >> "$GITHUB_OUTPUT"
+
+  # Policy (section 16.3): block delete/replace of protected resource types
+  # unless the merged PR carried the break-glass label with two approvals.
+  # CI re-checks this at apply time, not just at PR time, in case the base
+  # branch moved between approval and merge.
+  policy-gate:
+    needs: detect
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: conftest against each changed stack's plan
+        run: |
+          for stack in $(echo '${{ needs.detect.outputs.stacks }}' | jq -r '.[]'); do
+            terragrunt plan -out=tfplan.binary --terragrunt-working-dir "$stack"
+            terraform -chdir="$stack" show -json tfplan.binary > "$stack/plan.json"
+            conftest test --policy policies "$stack/plan.json"
+          done
+
+  apply:
+    needs: [detect, policy-gate]
+    runs-on: self-hosted
+    environment: production # requires manual approval for prod stacks per GitHub Environments protection rules
+    steps:
+      - uses: actions/checkout@v4
+      - name: terragrunt apply per changed stack
+        run: |
+          for stack in $(echo '${{ needs.detect.outputs.stacks }}' | jq -r '.[]'); do
+            echo "Applying $stack"
+            terragrunt apply -auto-approve --terragrunt-working-dir "$stack"
+          done

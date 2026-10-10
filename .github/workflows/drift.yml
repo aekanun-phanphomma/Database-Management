@@ -1,0 +1,47 @@
+# Nightly drift detection (spec section 3.1: "any manual change is drift
+# and is reported nightly"). Runs `terragrunt plan` across every stack and
+# posts non-empty plans to the ChatOps webhook — it does NOT auto-apply,
+# since an unexpected drift plan might be a sign of a deliberate
+# out-of-band break-glass change that hasn't been reconciled into Git yet.
+name: drift-detect
+
+on:
+  schedule:
+    - cron: "0 20 * * *" # 20:00 UTC nightly
+  workflow_dispatch: {}
+
+jobs:
+  drift:
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        cloud: [aws, azure]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Plan every stack for this cloud and collect non-empty diffs
+        id: plan
+        run: |
+          set -euo pipefail
+          FOUND=""
+          for dir in $(find "live/${{ matrix.cloud }}" -name terragrunt.hcl -exec dirname {} \;); do
+            if ! terragrunt plan -detailed-exitcode --terragrunt-working-dir "$dir" > "$dir/drift.log" 2>&1; then
+              rc=$?
+              if [[ $rc -eq 2 ]]; then
+                FOUND="${FOUND}\n- ${dir}"
+              fi
+            fi
+          done
+          echo "drift<<EOF" >> "$GITHUB_OUTPUT"
+          echo -e "$FOUND" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Notify ChatOps if drift found
+        if: steps.plan.outputs.drift != ''
+        run: |
+          curl -sf -X POST "$CHATOPS_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\": \"Drift detected in ${{ matrix.cloud }} stacks:${{ steps.plan.outputs.drift }}\"}"
+        env:
+          CHATOPS_WEBHOOK_URL: ${{ secrets.CHATOPS_WEBHOOK_URL }}

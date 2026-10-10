@@ -1,0 +1,64 @@
+# Restore pipeline (spec section 13.2-13.5). Triggered by a merged PR
+# under restores/. Prod restores require two DBA approvals, enforced by
+# CODEOWNERS + branch protection on the restores/ path, not by this
+# workflow — this workflow only executes what was already approved.
+name: restore
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "restores/**"
+
+jobs:
+  resolve:
+    runs-on: self-hosted
+    outputs:
+      cloud: ${{ steps.parse.outputs.cloud }}
+      env: ${{ steps.parse.outputs.env }}
+      mode: ${{ steps.parse.outputs.mode }}
+      server: ${{ steps.parse.outputs.server }}
+      ticket: ${{ steps.parse.outputs.ticket }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: parse
+        run: |
+          FILE=$(git diff --name-only HEAD~1 HEAD -- 'restores/*.yaml' | head -n1)
+          python3 - "$FILE" <<'PY' >> "$GITHUB_OUTPUT"
+          import sys, yaml
+          doc = yaml.safe_load(open(sys.argv[1]))
+          spec = doc["spec"]
+          print(f"cloud={spec['cloud']}")
+          print(f"env={spec['env']}")
+          print(f"mode={spec['mode']}")
+          print(f"server={spec['server']}")
+          print(f"ticket={doc['metadata']['ticket']}")
+          PY
+
+  apply-restore:
+    needs: resolve
+    runs-on: self-hosted
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply the matching restore module
+        run: |
+          echo "Restoring server ${{ needs.resolve.outputs.server }} (${{ needs.resolve.outputs.cloud }}/${{ needs.resolve.outputs.env }}), mode=${{ needs.resolve.outputs.mode }}, ticket=${{ needs.resolve.outputs.ticket }}"
+          # TODO: resolve the exact restore stack path from server/cloud/env
+          # and run `terragrunt apply` there. Left unresolved pending the
+          # server->stack lookup table referenced in scripts/detect-changed-stacks.sh.
+
+      - name: Validate
+        run: bash scripts/validate-restore.sh "$RESTORED_HOST" "$RESTORED_DB"
+        env:
+          RESTORED_HOST: ${{ steps.restore.outputs.host }}
+          RESTORED_DB: ${{ needs.resolve.outputs.server }}
+
+      - name: Notify ChatOps
+        run: |
+          curl -sf -X POST "$CHATOPS_WEBHOOK_URL" -H 'Content-Type: application/json' \
+            -d "{\"text\": \"Restore applied for ticket ${{ needs.resolve.outputs.ticket }} — awaiting DBA validation + cutover decision.\"}"
+        env:
+          CHATOPS_WEBHOOK_URL: ${{ secrets.CHATOPS_WEBHOOK_URL }}

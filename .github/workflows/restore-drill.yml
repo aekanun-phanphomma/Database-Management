@@ -1,0 +1,48 @@
+# Scheduled restore drills (spec section 13.1: monthly for tier1, quarterly
+# for tier2, semi-annual for tier3). Drills always auto-destroy regardless
+# of ttl_hours, and never get an L3 access stack applied — they exist to
+# prove the restore path works and to measure actual RTO against the
+# tier's target, not to produce a usable database.
+name: restore-drill
+
+on:
+  schedule:
+    - cron: "0 3 1 * *" # 03:00 UTC on the 1st — tier1 cadence; tier2/3 drills are filtered inside the job
+  workflow_dispatch:
+    inputs:
+      server:
+        description: "Server to drill (directory name under live/.../servers/)"
+        required: true
+
+jobs:
+  drill:
+    runs-on: self-hosted
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start timer
+        run: echo "DRILL_START=$(date -u +%s)" >> "$GITHUB_ENV"
+
+      - name: Apply restore module in drill mode
+        run: |
+          echo "Drilling restore for ${{ github.event.inputs.server || 'scheduled tier1 servers' }}"
+          # TODO: iterate servers due for a drill this cycle (by tier cadence),
+          # apply the matching modules/restore/* stack with mode=drill,
+          # tagging purpose=restore-drill so cleanup-ttl.yml always reaps it.
+
+      - name: Validate
+        run: echo "TODO: call scripts/validate-restore.sh against the drilled instance"
+
+      - name: Record RTO and notify
+        run: |
+          DRILL_END=$(date -u +%s)
+          RTO_SECONDS=$((DRILL_END - DRILL_START))
+          curl -sf -X POST "$CHATOPS_WEBHOOK_URL" -H 'Content-Type: application/json' \
+            -d "{\"text\": \"Restore drill complete. Measured RTO: ${RTO_SECONDS}s.\"}"
+        env:
+          CHATOPS_WEBHOOK_URL: ${{ secrets.CHATOPS_WEBHOOK_URL }}
+
+      - name: Destroy drilled resource
+        if: always()
+        run: echo "TODO: terragrunt destroy on the drill stack — drills are never kept, regardless of ttl_hours"

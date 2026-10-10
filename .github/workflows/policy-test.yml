@@ -1,0 +1,14 @@
+name: policy-test
+
+on:
+  pull_request:
+    paths:
+      - "policies/**"
+
+jobs:
+  conftest-verify:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Rego unit tests
+        run: conftest verify --policy policies

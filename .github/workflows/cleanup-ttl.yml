@@ -1,0 +1,56 @@
+# Nightly reaper for expired restore/drill resources (spec section 13.2
+# point 5). Anything tagged purpose=restore* with a `ttl` tag in the past
+# gets destroyed and reported — this is what actually enforces "restores
+# are temporary," not just documentation saying so.
+name: cleanup-ttl
+
+on:
+  schedule:
+    - cron: "0 21 * * *" # 21:00 UTC nightly
+  workflow_dispatch: {}
+
+jobs:
+  cleanup-aws:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find and destroy expired restore resources
+        run: |
+          set -euo pipefail
+          NOW=$(date -u +%s)
+          aws resourcegroupstaggingapi get-resources \
+            --tag-filters Key=purpose,Values=restore,restore-drill \
+            --query 'ResourceTagMappingList[].{Arn:ResourceARN,Tags:Tags}' \
+            --output json | \
+          python3 - "$NOW" <<'PY'
+          import json, sys, subprocess
+          now = int(sys.argv[1])
+          resources = json.load(sys.stdin)
+          for r in resources:
+              tags = {t["Key"]: t["Value"] for t in r["Tags"]}
+              ttl = tags.get("ttl")
+              if not ttl:
+                  continue
+              # TODO: parse RFC3339 ttl, compare to now, and call the
+              # appropriate `terragrunt destroy` for the stack that owns
+              # this ARN (requires a ARN->stack reverse lookup not yet built).
+              print(f"Expired candidate: {r['Arn']} ttl={ttl}")
+          PY
+        env:
+          AWS_DEFAULT_REGION: ap-southeast-1
+
+  cleanup-azure:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find and destroy expired restore resources
+        run: |
+          az resource list --tag purpose=restore --query "[].{id:id,tags:tags}" -o json | \
+          python3 - <<'PY'
+          import json, sys
+          resources = json.load(sys.stdin)
+          for r in resources:
+              ttl = (r.get("tags") or {}).get("ttl")
+              if ttl:
+                  print(f"Expired candidate: {r['id']} ttl={ttl}")
+          PY

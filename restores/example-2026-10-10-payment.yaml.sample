@@ -1,0 +1,17 @@
+# Example only — not validated by CI (filename doesn't end in .yaml).
+# Copy into restores/<name>.yaml and edit. See spec section 13.4.
+apiVersion: dbplatform/v1
+kind: RestoreRequest
+metadata:
+  ticket: INC-2026-1001
+  requested_by: someone@example.com
+  reason: "Bad deploy deleted rows in payment.app.transactions at 09:42 UTC"
+spec:
+  cloud: azure
+  env: prod
+  server: psql-acme-prod-sea-shared01
+  mode: single-db
+  database: payment
+  restore_time_utc: "2026-10-10T09:40:00Z"
+  cutover: manual
+  ttl_hours: 72

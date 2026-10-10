@@ -1,11 +1,19 @@
-# DBA team owns the whole platform.
-*                           @org/dba-team
+# Per spec section 16.4. DBA team owns the whole platform by default;
+# per-team request directories get an additional owner so a team's own
+# PR against its own requests still needs a DBA approval (CODEOWNERS
+# entries are additive — both owners must approve), but the team can
+# self-review non-DBA concerns in the same PR.
+*                    @org/dba-team
 
-# App teams may only touch their own request/restore files; the DBA
-# team still must approve, since CODEOWNERS always applies.
-/requests/                  @org/dba-team
-/restores/                  @org/dba-team
+/modules/**          @org/dba-team
+/live/**             @org/dba-team
+/policies/**         @org/dba-team @org/security
+/.github/workflows/  @org/dba-team @org/security
 
-# Policy and CI changes get an extra platform-eng review.
-/policies/                  @org/dba-team @org/platform-eng
-/.github/workflows/         @org/dba-team @org/platform-eng
+# Per-team request ownership. Add one line per team as they onboard
+# (spec shows this as a pattern, not a closed list) — do not use a
+# wildcard here, since that would let any team approve any other
+# team's request directory.
+/requests/payment-team/  @org/dba-team @org/payment-team
+
+/restores/**         @org/dba-team

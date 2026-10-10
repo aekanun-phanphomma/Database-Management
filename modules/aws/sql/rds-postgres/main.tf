@@ -1,8 +1,23 @@
 data "aws_region" "current" {}
 
+module "naming" {
+  source = "../../../_shared/naming"
+
+  cloud         = "aws"
+  org_prefix    = var.org_prefix
+  env           = var.env
+  region_abbr   = var.region_abbr
+  resource_type = "pg"
+  purpose       = var.purpose
+}
+
+locals {
+  name = module.naming.name
+}
+
 resource "aws_security_group" "this" {
-  name_prefix = "${var.name}-"
-  description = "Dedicated SG for RDS instance ${var.name} (spec 8.1 — one SG per server)."
+  name_prefix = "${local.name}-"
+  description = "Dedicated SG for RDS instance ${local.name} (spec 8.1 — one SG per server)."
   vpc_id      = var.vpc_id
 
   ingress {
@@ -28,7 +43,7 @@ resource "aws_security_group" "this" {
 }
 
 resource "aws_db_parameter_group" "this" {
-  name   = "${var.name}-pg16"
+  name   = "${local.name}-pg16"
   family = "postgres16" # TODO(verify): derive from var.engine_version major instead of hardcoding, once engine_version is finalized
 
   parameter {
@@ -70,7 +85,7 @@ resource "aws_db_parameter_group" "this" {
 }
 
 resource "aws_db_event_subscription" "this" {
-  name      = "${var.name}-events"
+  name      = "${local.name}-events"
   sns_topic = var.alarm_topic_arn
   source_type = "db-instance"
   source_ids  = [aws_db_instance.this.id]
@@ -80,7 +95,7 @@ resource "aws_db_event_subscription" "this" {
 }
 
 resource "aws_db_instance" "this" {
-  identifier                          = var.name
+  identifier                          = local.name
   engine                              = "postgres"
   engine_version                      = var.engine_version
   instance_class                      = var.instance_class
@@ -106,7 +121,7 @@ resource "aws_db_instance" "this" {
   delete_automated_backups            = false
   deletion_protection                 = true
   skip_final_snapshot                 = false
-  final_snapshot_identifier           = "${var.name}-final"
+  final_snapshot_identifier           = "${local.name}-final"
   performance_insights_enabled        = true
   performance_insights_kms_key_id     = var.kms_key_arn
   monitoring_interval                 = 30
@@ -124,7 +139,7 @@ resource "aws_db_instance" "this" {
 
 resource "aws_route53_record" "cname" {
   zone_id = var.private_dns_zone_id
-  name    = "${var.name}.${var.private_dns_zone_name}"
+  name    = "${local.name}.${var.private_dns_zone_name}"
   type    = "CNAME"
   ttl     = 60
   records = [aws_db_instance.this.address]

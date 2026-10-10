@@ -1,5 +1,20 @@
+module "naming" {
+  source = "../../../_shared/naming"
+
+  cloud         = "azure"
+  org_prefix    = var.org_prefix
+  env           = var.env
+  region_abbr   = var.region_abbr
+  resource_type = "psql"
+  purpose       = var.purpose
+}
+
+locals {
+  name = module.naming.name
+}
+
 resource "azurerm_postgresql_flexible_server" "this" {
-  name                = var.name
+  name                = local.name
   resource_group_name = var.resource_group_name
   location            = var.location
   version             = var.pg_version

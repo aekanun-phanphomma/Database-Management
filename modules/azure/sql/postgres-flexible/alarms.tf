@@ -9,7 +9,7 @@ variable "action_group_id" {
 }
 
 resource "azurerm_monitor_metric_alert" "cpu_high" {
-  name                = "${var.name}-cpu-high"
+  name                = "${local.name}-cpu-high"
   resource_group_name = var.resource_group_name
   scopes              = [azurerm_postgresql_flexible_server.this.id]
   severity            = 2
@@ -32,7 +32,7 @@ resource "azurerm_monitor_metric_alert" "cpu_high" {
 }
 
 resource "azurerm_monitor_metric_alert" "storage_low" {
-  name                = "${var.name}-storage-low"
+  name                = "${local.name}-storage-low"
   resource_group_name = var.resource_group_name
   scopes              = [azurerm_postgresql_flexible_server.this.id]
   severity            = 2
@@ -55,7 +55,7 @@ resource "azurerm_monitor_metric_alert" "storage_low" {
 }
 
 resource "azurerm_monitor_metric_alert" "connections_high" {
-  name                = "${var.name}-connections-high"
+  name                = "${local.name}-connections-high"
   resource_group_name = var.resource_group_name
   scopes              = [azurerm_postgresql_flexible_server.this.id]
   severity            = 2

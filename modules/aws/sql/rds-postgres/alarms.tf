@@ -2,7 +2,7 @@
 # reasonable starting defaults, not workload-tuned — adjust per server
 # once real traffic patterns are known.
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  alarm_name          = "${var.name}-cpu-high"
+  alarm_name          = "${local.name}-cpu-high"
   namespace           = "AWS/RDS"
   metric_name         = "CPUUtilization"
   statistic           = "Average"
@@ -17,7 +17,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "storage_low" {
-  alarm_name          = "${var.name}-free-storage-low"
+  alarm_name          = "${local.name}-free-storage-low"
   namespace           = "AWS/RDS"
   metric_name         = "FreeStorageSpace"
   statistic           = "Average"
@@ -32,7 +32,7 @@ resource "aws_cloudwatch_metric_alarm" "storage_low" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "connections_high" {
-  alarm_name          = "${var.name}-connections-high"
+  alarm_name          = "${local.name}-connections-high"
   namespace           = "AWS/RDS"
   metric_name         = "DatabaseConnections"
   statistic           = "Average"
@@ -48,7 +48,7 @@ resource "aws_cloudwatch_metric_alarm" "connections_high" {
 
 resource "aws_cloudwatch_metric_alarm" "replica_lag_high" {
   count               = var.tier == "tier1" ? 1 : 0
-  alarm_name          = "${var.name}-replica-lag-high"
+  alarm_name          = "${local.name}-replica-lag-high"
   namespace           = "AWS/RDS"
   metric_name         = "ReplicaLag"
   statistic           = "Average"

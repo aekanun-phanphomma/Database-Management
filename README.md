@@ -33,8 +33,20 @@ Read these before changing anything structural:
 - [docs/adr/0004-shared-servers.md](docs/adr/0004-shared-servers.md)
   — how many databases can share one server, and the guardrails that
   keep one tenant from affecting another.
+- [docs/adr/0005-secrets-strategy.md](docs/adr/0005-secrets-strategy.md)
+  — the four-tier secrets fallback order and where each tier is
+  actually used in this repo today.
+- [docs/adr/0006-restore-strategy.md](docs/adr/0006-restore-strategy.md)
+  — why restore always targets a new resource, and why single-db mode
+  is two different mechanisms depending on engine.
+- [docs/adr/0007-role-model.md](docs/adr/0007-role-model.md) — the six
+  standard access tiers and how each engine's native model maps to them.
 - [docs/architecture.md](docs/architecture.md) — diagrams and the
   naming convention.
+- [docs/security-controls.md](docs/security-controls.md) — every
+  control from the spec mapped to the file that implements it and the
+  policy/test that enforces it, including an honest list of which
+  controls aren't policy-enforced yet.
 
 ## Requesting a database
 
@@ -85,12 +97,16 @@ Built phase by phase (per the platform design doc, §20):
 4. L2 databases + L3 access for Postgres, wired end-to-end for a dev
    server on each cloud.
 5. Restore modules, scripts, and runbooks for Postgres PITR.
-6. Remaining CI/CD workflows (apply/drift/restore/restore-drill/
-   cleanup-ttl/policy-test) and Rego policy-as-code with unit tests.
+6. CI/CD workflows (`pr.yml`, `apply.yml`, `drift.yml`, `restore.yml`,
+   `restore-drill.yml`, `cleanup-ttl.yml`) and Rego policy-as-code
+   (Rego v1, `package dbplatform.*`) with unit tests.
 7. Remaining engines from the scope matrix: RDS MySQL/SQL Server,
    DynamoDB, DocumentDB, ElastiCache, Azure SQL/MI, MySQL Flexible,
    Cosmos DB (SQL + Mongo APIs), Azure Cache for Redis — plus their
    restore modules.
+8. ADRs 0005–0007, `docs/security-controls.md`, the shared `naming`
+   and `tagging` modules, the remaining `docs/runbooks/*` named in the
+   spec, and module-local `tests/` per spec section 19's module layout.
 
 Every module is written against the pinned provider versions in
 [docs/adr/0002-versions.md](docs/adr/0002-versions.md); where an
@@ -101,3 +117,13 @@ search the repo for `TODO(verify)` and confirm those arguments first —
 particularly around Entra/AAD auth maturity for MySQL Flexible Server
 and Azure Cache for Redis, and a handful of restore-specific argument
 shapes.
+
+**Known gaps** (see [docs/security-controls.md](docs/security-controls.md)'s
+"Known gaps" section for the full, honest list): threat-detection
+modules (GuardDuty RDS Protection / Defender for Cloud) and org-level
+guardrails (SCPs / Azure Policy) don't exist yet; per-layer IAM/Entra
+role *definitions* are referenced by name (`id-<env>-l0..l3`) but not
+yet created as Terraform resources; GitHub Actions are pinned to tags,
+not SHAs; the `naming`/`tagging` shared modules are wired into the two
+flagship Postgres stacks only, not retrofitted across every other
+engine's `live/` wiring yet.

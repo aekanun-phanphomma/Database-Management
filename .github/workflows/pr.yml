@@ -1,37 +1,93 @@
-# TODO(verify): pin actions/checkout and actions/setup-python to exact SHAs
-# before first real use (supply-chain rule, platform spec section 3.10).
-# This workflow currently only validates requests/restores; plan/apply
-# jobs for live/ stacks are added in a later phase once modules exist.
-name: pr-validate
+# TODO(verify): pin every action below to an exact SHA before first real
+# use (supply-chain rule, spec section 3.10). Currently on @v4 tags.
+name: pr
 
 on:
   pull_request:
-    paths:
-      - "requests/**"
-      - "restores/**"
+    paths: ["live/**", "modules/**", "requests/**", "restores/**", "policies/**"]
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
 
 jobs:
-  validate-requests:
-    runs-on: self-hosted # TODO(verify): confirm self-hosted runner label once ci-runner modules exist
+  static:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # TODO(verify): pin to SHA
-
-      - uses: actions/setup-python@v5 # TODO(verify): pin to SHA
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
         with:
-          python-version: "3.12"
+          terraform_version: "1.11.x"
 
-      - name: Install validators
-        run: pip install check-jsonschema pyyaml
+      - run: terraform fmt -check -recursive
 
       - name: Validate database requests against schema
         run: |
           check-jsonschema --schemafile requests/_schema/request.schema.json \
-            $(git diff --name-only origin/main...HEAD -- 'requests/**/*.yaml' ':!requests/_schema/**' || true)
+            $(find requests -mindepth 2 -name '*.yaml' ! -path 'requests/_schema/*')
 
       - name: Validate restore requests against schema
         run: |
-          check-jsonschema --schemafile requests/_schema/restore_request.schema.json \
-            $(git diff --name-only origin/main...HEAD -- 'restores/**/*.yaml' || true)
+          shopt -s nullglob
+          files=(restores/*.yaml)
+          if [ ${#files[@]} -gt 0 ]; then
+            check-jsonschema --schemafile requests/_schema/restore_request.schema.json "${files[@]}"
+          fi
 
-      - name: Check for duplicate (server, database) and principals
+      - name: Duplicate (server, database) and principal check
         run: bash scripts/check-duplicates.sh
+
+      - run: tflint --recursive
+
+      - run: checkov -d modules --quiet
+
+      - name: terraform test (per module that has one)
+        run: |
+          for m in $(find modules -name '*.tftest.hcl' -exec dirname {} \; | xargs -n1 dirname | sort -u); do
+            echo "Testing $m"
+            (cd "$m" && terraform init -backend=false && terraform test)
+          done
+
+      - run: conftest verify --policy policies
+
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      stacks: ${{ steps.d.outputs.stacks }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: d
+        run: |
+          STACKS=$(bash scripts/detect-changed-stacks.sh "origin/${{ github.event.pull_request.base.sha }}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "stacks=$STACKS" >> "$GITHUB_OUTPUT"
+          # A requests/** change maps to the target server's 20-databases
+          # and 30-access stacks (and 10-server if extensions/tier
+          # changed) — scripts/detect-changed-stacks.sh prints a NOTE for
+          # these to stderr rather than resolving them automatically; see
+          # that script's own TODO for the region lookup it still needs.
+
+  plan:
+    needs: [static, detect]
+    if: needs.detect.outputs.stacks != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: ${{ fromJson(needs.detect.outputs.stacks) }}
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Plan
+        working-directory: ${{ matrix.stack }}
+        run: |
+          terragrunt plan -out=tfplan -lock-timeout=5m -parallelism=4
+          terragrunt show -json tfplan > tfplan.json
+
+      - name: Policy
+        run: conftest test ${{ matrix.stack }}/tfplan.json --policy policies --all-namespaces
+        # Break-glass exceptions are NOT injected at plan time — a PR plan
+        # always runs the policy at full strength. Exceptions only apply
+        # at apply.yml's policy-gate, after the PR has actually been
+        # approved with the break-glass label (see policies/deny_destroy.rego).

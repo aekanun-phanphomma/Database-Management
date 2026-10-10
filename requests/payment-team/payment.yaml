@@ -1,0 +1,37 @@
+apiVersion: dbplatform/v1
+kind: DatabaseRequest
+metadata:
+  name: payment
+  team: payment-team
+  cost_center: CC-1234
+  ticket: CHG-2026-0412
+spec:
+  cloud: azure
+  env: dev
+  engine: postgres-flexible
+  server: psql-shared01
+  data_classification: confidential
+  tier: tier1
+  databases:
+    - name: payment
+      connection_limit: 80
+      extensions: [pgcrypto, uuid-ossp]
+      schemas: [app, audit]
+  access:
+    apps:
+      - principal: mi-payment-api
+        object_id: "00000000-0000-0000-0000-000000000001"
+        role: rw
+      - principal: mi-payment-report
+        object_id: "00000000-0000-0000-0000-000000000002"
+        role: ro
+    migration:
+      principal: mi-payment-migrator
+      object_id: "00000000-0000-0000-0000-000000000003"
+    engineers:
+      - group: grp-payment-db-eng-ro
+        object_id: "00000000-0000-0000-0000-000000000004"
+        role: eng_ro
+      - group: grp-payment-db-eng-rw
+        object_id: "00000000-0000-0000-0000-000000000005"
+        role: eng_rw

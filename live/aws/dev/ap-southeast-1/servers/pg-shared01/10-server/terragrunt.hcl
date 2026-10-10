@@ -1,0 +1,63 @@
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+terraform {
+  source = "${get_repo_root()}/modules/aws/sql/rds-postgres"
+}
+
+dependency "network" {
+  config_path = "${get_repo_root()}/live/aws/dev/ap-southeast-1/00-foundation/network"
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs = {
+    vpc_id                     = "vpc-mock"
+    db_subnet_group_name       = "mock-db"
+    baseline_security_group_id = "sg-mock"
+    private_dns_zone_id        = "ZMOCK"
+    private_dns_zone_name      = "db.dev.internal"
+  }
+}
+
+dependency "kms" {
+  config_path = "${get_repo_root()}/live/aws/dev/ap-southeast-1/00-foundation/kms"
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs = { key_arns = { rds = "arn:aws:kms:ap-southeast-1:000000000000:key/mock", secrets = "arn:aws:kms:ap-southeast-1:000000000000:key/mock" } }
+}
+
+dependency "observability" {
+  config_path = "${get_repo_root()}/live/aws/dev/ap-southeast-1/00-foundation/observability"
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs = { alarm_topic_arn = "arn:aws:sns:ap-southeast-1:000000000000:mock" }
+}
+
+dependency "backup_policy" {
+  config_path = "${get_repo_root()}/live/_shared/backup-policy"
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs = { policy = { tier1 = { pitr_retention_days = 35 } } }
+}
+
+# This server's effective tier is the HIGHEST tier of any database placed
+# on it (ADR 0004). For dev, hardcode tier1 to exercise the full HA/backup
+# path; a real shared server would compute this from the request inventory.
+locals {
+  tier = "tier1"
+}
+
+inputs = {
+  name                   = "${get_env("ORG_PREFIX", "acme")}-dev-pg-shared01"
+  instance_class         = "db.r6g.large"
+  allocated_storage      = 100
+  max_allocated_storage  = 500
+  db_subnet_group_name   = dependency.network.outputs.db_subnet_group_name
+  vpc_id                 = dependency.network.outputs.vpc_id
+  ingress_security_group_ids = [dependency.network.outputs.baseline_security_group_id]
+  kms_key_arn             = dependency.kms.outputs.key_arns["rds"]
+  secrets_kms_key_arn     = dependency.kms.outputs.key_arns["secrets"]
+  tier                    = local.tier
+  backup_policy           = { pitr_retention_days = dependency.backup_policy.outputs.policy[local.tier].pitr_retention_days }
+  enhanced_monitoring_role_arn = get_env("DEV_RDS_MONITORING_ROLE_ARN", "arn:aws:iam::000000000000:role/rds-monitoring")
+  alarm_topic_arn         = dependency.observability.outputs.alarm_topic_arn
+  allowed_classifications = ["internal", "confidential"]
+  private_dns_zone_id     = dependency.network.outputs.private_dns_zone_id
+  private_dns_zone_name   = dependency.network.outputs.private_dns_zone_name
+}

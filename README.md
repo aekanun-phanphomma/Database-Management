@@ -75,7 +75,29 @@ docs/runbooks/  restore / break-glass / rotation runbooks
 
 ## Status
 
-This repository is being built phase by phase (per the platform
-design doc, §20). Current phase: **1 — repository scaffold**
-(structure, ADRs, tooling config, request schema). No cloud
-infrastructure modules are implemented yet.
+Built phase by phase (per the platform design doc, §20):
+
+1. Repository scaffold — structure, ADRs, tooling config, request schema.
+2. L0 foundation — network/KMS/Key Vault/backup/observability/state
+   backend/CI runners, AWS + Azure.
+3. L1 servers for the phase-2 engines — RDS Postgres, Aurora Postgres,
+   Azure PostgreSQL Flexible Server.
+4. L2 databases + L3 access for Postgres, wired end-to-end for a dev
+   server on each cloud.
+5. Restore modules, scripts, and runbooks for Postgres PITR.
+6. Remaining CI/CD workflows (apply/drift/restore/restore-drill/
+   cleanup-ttl/policy-test) and Rego policy-as-code with unit tests.
+7. Remaining engines from the scope matrix: RDS MySQL/SQL Server,
+   DynamoDB, DocumentDB, ElastiCache, Azure SQL/MI, MySQL Flexible,
+   Cosmos DB (SQL + Mongo APIs), Azure Cache for Redis — plus their
+   restore modules.
+
+Every module is written against the pinned provider versions in
+[docs/adr/0002-versions.md](docs/adr/0002-versions.md); where an
+argument's exact name or availability couldn't be verified against
+live Registry docs, it's marked `# TODO(verify)` in-code rather than
+guessed. Before a real `terraform plan`/`apply` against any module,
+search the repo for `TODO(verify)` and confirm those arguments first —
+particularly around Entra/AAD auth maturity for MySQL Flexible Server
+and Azure Cache for Redis, and a handful of restore-specific argument
+shapes.

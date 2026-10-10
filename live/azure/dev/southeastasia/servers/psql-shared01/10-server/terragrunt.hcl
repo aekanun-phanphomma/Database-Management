@@ -21,7 +21,7 @@ dependency "keyvault" {
 dependency "observability" {
   config_path = "${get_repo_root()}/live/azure/dev/southeastasia/00-foundation/observability"
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]
-  mock_outputs = { log_analytics_workspace_id = "/subscriptions/mock/.../workspaces/mock" }
+  mock_outputs = { log_analytics_workspace_id = "/subscriptions/mock/.../workspaces/mock", action_group_id = "/subscriptions/mock/.../actionGroups/mock" }
 }
 
 dependency "backup_policy" {
@@ -66,6 +66,7 @@ inputs = {
   pipeline_l3_object_id   = get_env("DEV_L3_SP_OID", "00000000-0000-0000-0000-000000000000")
   pipeline_l3_name        = "id-dev-l3"
   log_analytics_workspace_id = dependency.observability.outputs.log_analytics_workspace_id
+  action_group_id            = dependency.observability.outputs.action_group_id
   allowed_classifications    = ["internal", "confidential"]
   allowed_extensions          = local.allowed_extensions
 }

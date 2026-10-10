@@ -1,0 +1,36 @@
+# TODO(verify): pin every hook below to a specific tag/SHA before first real use (supply-chain rule, spec section 3.10).
+repos:
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.96.1 # TODO(verify): confirm latest stable tag
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+      - id: terraform_tflint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+      - id: terraform_docs
+      - id: terraform_checkov
+        args:
+          - --args=--quiet
+          - --args=--compact
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0 # TODO(verify): confirm latest stable tag
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files
+      - id: detect-private-key
+
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.29.4 # TODO(verify): confirm latest stable tag
+    hooks:
+      - id: check-jsonschema
+        name: validate database requests
+        files: ^requests/(?!_schema/).*\.ya?ml$
+        args: ["--schemafile", "requests/_schema/request.schema.json"]
+      - id: check-jsonschema
+        name: validate restore requests
+        files: ^restores/.*\.ya?ml$
+        args: ["--schemafile", "requests/_schema/restore_request.schema.json"]

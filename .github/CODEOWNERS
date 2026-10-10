@@ -1,0 +1,11 @@
+# DBA team owns the whole platform.
+*                           @org/dba-team
+
+# App teams may only touch their own request/restore files; the DBA
+# team still must approve, since CODEOWNERS always applies.
+/requests/                  @org/dba-team
+/restores/                  @org/dba-team
+
+# Policy and CI changes get an extra platform-eng review.
+/policies/                  @org/dba-team @org/platform-eng
+/.github/workflows/         @org/dba-team @org/platform-eng

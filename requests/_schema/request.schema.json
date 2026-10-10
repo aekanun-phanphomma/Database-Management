@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://db-platform/schema/request.schema.json",
+  "title": "DatabaseRequest",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": { "const": "dbplatform/v1" },
+    "kind": { "const": "DatabaseRequest" },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "team", "cost_center", "ticket"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,40}$" },
+        "team": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,40}$" },
+        "cost_center": { "type": "string" },
+        "ticket": { "type": "string" }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "required": ["cloud", "env", "engine", "server", "data_classification", "tier", "databases", "access"],
+      "additionalProperties": false,
+      "properties": {
+        "cloud": { "enum": ["aws", "azure"] },
+        "env": { "enum": ["dev", "uat", "prod"] },
+        "engine": {
+          "enum": [
+            "postgres-flexible", "rds-postgres", "aurora-postgres",
+            "mssql-server", "mssql-mi", "rds-sqlserver",
+            "mysql-flexible", "rds-mysql",
+            "cosmos-nosql", "cosmos-mongo", "dynamodb", "documentdb",
+            "redis", "elasticache"
+          ]
+        },
+        "server": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,60}$" },
+        "data_classification": { "enum": ["public", "internal", "confidential", "restricted"] },
+        "tier": { "enum": ["tier1", "tier2", "tier3"] },
+        "databases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,30}$" },
+              "connection_limit": { "type": "integer", "minimum": 1, "maximum": 1000 },
+              "extensions": { "type": "array", "items": { "type": "string" } },
+              "schemas": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,30}$" } }
+            }
+          }
+        },
+        "access": {
+          "type": "object",
+          "required": ["apps", "migration", "engineers"],
+          "additionalProperties": false,
+          "properties": {
+            "apps": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["principal", "role"],
+                "additionalProperties": false,
+                "properties": {
+                  "principal": { "type": "string" },
+                  "object_id": { "type": "string" },
+                  "role": { "enum": ["rw", "ro"] }
+                }
+              }
+            },
+            "migration": {
+              "type": "object",
+              "required": ["principal"],
+              "additionalProperties": false,
+              "properties": {
+                "principal": { "type": "string" },
+                "object_id": { "type": "string" }
+              }
+            },
+            "engineers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["group", "role"],
+                "additionalProperties": false,
+                "properties": {
+                  "group": { "type": "string" },
+                  "object_id": { "type": "string" },
+                  "role": { "enum": ["eng_ro", "eng_rw"] }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

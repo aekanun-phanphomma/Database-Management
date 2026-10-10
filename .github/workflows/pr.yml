@@ -1,0 +1,37 @@
+# TODO(verify): pin actions/checkout and actions/setup-python to exact SHAs
+# before first real use (supply-chain rule, platform spec section 3.10).
+# This workflow currently only validates requests/restores; plan/apply
+# jobs for live/ stacks are added in a later phase once modules exist.
+name: pr-validate
+
+on:
+  pull_request:
+    paths:
+      - "requests/**"
+      - "restores/**"
+
+jobs:
+  validate-requests:
+    runs-on: self-hosted # TODO(verify): confirm self-hosted runner label once ci-runner modules exist
+    steps:
+      - uses: actions/checkout@v4 # TODO(verify): pin to SHA
+
+      - uses: actions/setup-python@v5 # TODO(verify): pin to SHA
+        with:
+          python-version: "3.12"
+
+      - name: Install validators
+        run: pip install check-jsonschema pyyaml
+
+      - name: Validate database requests against schema
+        run: |
+          check-jsonschema --schemafile requests/_schema/request.schema.json \
+            $(git diff --name-only origin/main...HEAD -- 'requests/**/*.yaml' ':!requests/_schema/**' || true)
+
+      - name: Validate restore requests against schema
+        run: |
+          check-jsonschema --schemafile requests/_schema/restore_request.schema.json \
+            $(git diff --name-only origin/main...HEAD -- 'restores/**/*.yaml' || true)
+
+      - name: Check for duplicate (server, database) and principals
+        run: bash scripts/check-duplicates.sh
